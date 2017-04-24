@@ -25,7 +25,7 @@ use warnings;
 #   make sure this script can find the module
 #   without being run by 'make test' (see --deamon switch below).
 
-use lib "blib/lib";
+use lib 'blib/lib';
 
 use Proc::PID::File;
 use Test::Simple tests => 12;
@@ -34,84 +34,87 @@ use File::Spec;
 my $devnull = File::Spec->devnull;
 
 $|++; $\ = "\n";
-my %args = (name => "test", dir => ".", debug => $ENV{DEBUG} || "");
-my $cmd = shift || "";
+my %args = (name => 'test', dir => '.', debug => $ENV{DEBUG} || '');
+my $cmd = shift || '';
 
 # - deamon -------------------------------------------------------------------
 
-if ($cmd eq "--daemon") {
-	print "-- daemon --";
+if ($cmd eq '--daemon') {
+	print '-- daemon --';
 	$args{verify} = 1;
     die "Already running!" if Proc::PID::File->running(%args);
     sleep(5);
-	print "-- deamon: exiting --";
+	print '-- deamon: exiting --';
     exit();
-    }
+}
 
-exit() if $cmd eq "--short";
+exit() if $cmd eq '--short';
 
 my $pid;
 our $ProcessObj;
 sub rundaemon {
-	my $pipes = $args{debug} =~ /D/ ? "" : "> $devnull 2>&1";
+	my $pipes = $args{debug} =~ /D/ ? '' : '> ' . $devnull . ' 2>&1';
+	
 	if ($^O eq 'MSWin32') {
 		require Win32::Process;
 		require Win32;
 		$ProcessObj->Kill(0) if $ProcessObj;
-		Win32::Process::Create($ProcessObj,
-                            "$^X",
-                            "$^X $0 --daemon $pipes",
-                            0,
-                            32 + 134217728, #NORMAL_PRIORITY_CLASS + CREATE_NO_WINDOW
-                            ".") || die $^E;
+		Win32::Process::Create(
+			$ProcessObj,
+			$^X,
+			join(' ', $^X, $0, '--daemon', $pipes),
+			0,
+			32 + 134217728, #NORMAL_PRIORITY_CLASS + CREATE_NO_WINDOW
+			'.'
+		) or die $^E;
 	} else {
-		system qq|$^X $0 --daemon $pipes &|;
+		system(join(' ', $^X, $0, '--daemon', $pipes, '&'));
 	}
 	sleep 1;
-	open my $fh, '<', "$args{dir}/$args{name}.pid" or die "Error reading $args{dir}/$args{name}.pid - $!";
-	my $pid=<$fh>;
+	open my $fh, '<', $args{dir} . '/' . $args{name} . '.pid' or die "Error reading $args{dir}/$args{name}.pid - $!";
+	$pid = <$fh>;
 	chomp($pid);
-	}
+}
 
 # - thread-safety test -------------------------------------------------------
 
-ok(1, "SKIPPED - simple: thread safe") unless
+ok(1, 'SKIPPED - simple: thread safe') unless
 	$] >= 5.008001
-	&& $Config{"useithreads"}
+	&& $Config{'useithreads'}
 	&& eval { 
 		require threads; 
 		Proc::PID::File->running(%args);
 		threads->create(sub {})->join();
 		sleep(2);
-		ok(-f "test.pid", "simple: thread safe");
+		ok(-f 'test.pid', 'simple: thread safe');
 	};
 
 # - basic run test -----------------------------------------------------------
 
-unlink("test.pid") || die $! if -e "test.pid";
+unlink('test.pid') or die $! if -e 'test.pid';
 rundaemon();
 my $rc = Proc::PID::File->running(%args);
-ok($rc, "simple: running");
+ok($rc, 'simple: running');
 
 # - verification tests -------------------------------------------------------
 
-ok(1, "SKIPPED - simple: verified (real)") unless
+ok(1, 'SKIPPED - simple: verified (real)') unless
 	$^O =~ /linux|freebsd|cygwin/i
 	&& eval {
 		$rc = Proc::PID::File->running(%args, verify => 1);
-		ok($rc, "simple: verified (real)");
-		};
+		ok($rc, 'simple: verified (real)');
+	};
 
-ok(1, "SKIPPED - simple: verified (false)") unless
+ok(1, 'SKIPPED - simple: verified (false)') unless
 	$^O =~ /linux|freebsd|cygwin/i
 	&& eval {
 		# WARNING: the following test takes over the pidfile from
 		# the daemon such that he cannot clean it up.  this is as
 		# it should be since no one but us should occupy our pidfile 
 
-		$rc = Proc::PID::File->running(%args, verify => "falsetest");
-		ok(! $rc, "simple: verified (false)");
-		};
+		$rc = Proc::PID::File->running(%args, verify => 'falsetest');
+		ok(! $rc, 'simple: verified (false)');
+	};
 
 # - single instance test -----------------------------------------------------
 
@@ -123,44 +126,45 @@ if ($ProcessObj) {
 }
 
 $rc = Proc::PID::File->running(%args);
-ok(! $rc, "simple: single instance");
+ok(! $rc, 'simple: single instance');
 
 # - destroy test -------------------------------------------------------------
 
-system qq|$^X $0 --short > $devnull 2>&1|;
-ok(-f "test.pid", "simple: destroy");
+system(join(' ', $^X, $0, '--short', '>', $devnull, '2>&1'));
+ok(-f 'test.pid', 'simple: destroy');
 
 # - OO Interface tests -------------------------------------------------------
 
 my $c1 = Proc::PID::File->new(%args);
-ok($c1->{path}, "oo: object initialised");
+ok($c1->{path}, 'oo: object initialised');
 
 $c1->touch();
-ok(-f $c1->{path}, "oo: file touched");
+ok(-f $c1->{path}, 'oo: file touched');
 
-ok(!$c1->alive(), "oo: alive (with current process)");
+ok(!$c1->alive(), 'oo: alive (with current process)');
 
-unlink("test.pid") || die $! if -e "test.pid";
+unlink('test.pid') or die "Can't unlink test.pid: $!" if (-e 'test.pid');
 rundaemon();
-ok($c1->alive(), "oo: alive (with daemon)");
+ok($c1->alive(), 'oo: alive (with daemon)');
 
-ok(1, "SKIPPED - oo: alive (verified)") unless
+ok(1, 'SKIPPED - oo: alive (verified)') unless
 	$^O =~ /linux|freebsd|cygwin/i
 	&& eval {
-		ok($c1->alive(verify => 1), "oo: alive (verified)");
-		};
+		ok($c1->alive(verify => 1), 'oo: alive (verified)');
+	};
 
 $c1->release();
-ok(! -f $c1->{path}, "oo: released");
+ok(! -f $c1->{path}, 'oo: released');
 
 # - wait for daemon to exit --------------------------------------------------
 
 $\ = undef;
-print "#waiting for daemon death\n";
+print '#waiting for daemon death' . "\n";
 if ($ProcessObj) {
 	$ProcessObj->Wait(1000) or $ProcessObj->Kill(0);
 } else {
-	sleep 1, print "." while kill 0, $pid;
+	sleep 1, print '.' while kill 0, $pid;
 }
-#print "\ndone\n";
-#exit 0;
+unlink('test.pid') or die "Can't unlink test.pid: $!" if (-e 'test.pid');
+print "\ndone\n";
+exit 0;
