@@ -141,12 +141,15 @@ to the debugging output.
 
 sub new {
 	my $class = shift;
-	my $self = bless({}, $class);
+    
+	my $self = bless({},$class);
+
 	%$self = &args;
 	$self->file();	# init file path
 	$self->{debug} ||= "";
+    
 	return $self;
-	}
+}
 
 =head2 file [hash[-ref]]
 
@@ -170,11 +173,12 @@ to I<basename($0)>.
 
 sub file {
 	my $self = shift;
+    
 	%$self = (%$self, &args);
-	$self->{dir} ||= $RUNDIR;
+	$self->{dir}  ||= $RUNDIR;
 	$self->{name} ||= $ME;
-	$self->{path} = sprintf("%s/%s.pid", $self->{dir}, $self->{name});
-	}
+	$self->{path}   = sprintf("%s/%s.pid", $self->{dir}, $self->{name});    
+}
 
 =head2 alive
 
@@ -192,15 +196,15 @@ sub alive {
 	my %args = &args;
 	$self->{verify} = $args{verify} if $args{verify};
 
-	my $pid = $self->read() || "";
-	$self->debug("alive(): $pid");
+	my $pid = $self->read() || '';
+	$self->debug('alive(): ' . $pid);
 
 	if ($pid && $pid != $$ && kill(0, $pid)) {
         return $self->verify($pid) ? $pid : 0;
-        }
+    }
 
 	return 0;
-	}
+}
 
 =head2 touch
 
@@ -220,9 +224,10 @@ This method is used to delete the I<pidfile> and is automatically called by DEST
 
 sub release {
 	my $self = shift;
-	$self->debug("release()");
+    
+	$self->debug('release()');
 	unlink($self->{path}) || warn $!;
-	}
+}
 
 =head2 locktime [hash[-ref]]
 
@@ -232,8 +237,9 @@ This method returns the I<mtime> of the I<pidfile>.
 
 sub locktime {
     my $self = shift;
+    
     return (stat($self->{path}))[10];
-	}
+}
 
 # -- support functionality ---------------------------------------------------
 
@@ -242,7 +248,7 @@ sub verify {
     return 1 unless $self->{verify};
 
 	my $ret = 0;
-    $self->debug("verify(): OS = $^O");
+    $self->debug('verify(): OS = ' . $^O);
     if ($^O =~ /linux|freebsd|cygwin/i) {
         my $me = $self->{verify};
 		if (!$me || $me eq "1") {
@@ -250,11 +256,12 @@ sub verify {
 			if ($^O eq "cygwin") {
 				$^X =~ m|([^/]+)$|;
 				($me = $1) =~ s/\.exe$//;
-				}
 			}
+		}
+        
 		my $cols = delete($ENV{'COLUMNS'}); # prevents `ps` from wrapping
         my @ps = split m|$/|, qx/ps -fp $pid/
-            || die "ps utility not available: $!";
+            || die 'ps utility not available: ' . $!;
         s/^\s+// for @ps;   # leading spaces confuse us
 
 		$ENV{'COLUMNS'} = $cols if defined($cols);
@@ -262,11 +269,11 @@ sub verify {
         my $n = split(/\s+/, $ps[0]);
         @ps = split /\s+/, $ps[1], $n;
         $ret = $ps[$n - 1] =~ /\Q$me\E/;;
-        }
-
-	$self->debug(" - ret: [$ret]");
-	$ret;
     }
+
+	$self->debug(' - ret: [' . $ret . ']');
+	$ret;
+}
 
 # Returns the process id currently stored in the file set.  If the method
 # is passed a file handle, it will return the value, leaving the file handle
@@ -279,16 +286,15 @@ sub verify {
 sub read {
 	my ($self, $fh) = @_;
 
-	sysopen($fh, $self->{path}, O_RDWR|O_CREAT)
-		|| die qq/Cannot open pid file "$self->{path}": $!\n/;
-	flock($fh, LOCK_EX | LOCK_NB)
-        || die qq/pid "$self->{path}" already locked: $!\n/;
-	my ($pid) = <$fh> =~ /^(\d+)/;
-	close $fh if @_ == 1;
+	sysopen($fh, $self->{path}, O_RDWR|O_CREAT) or die 'Cannot open pid file "' . $self->{path} . '": ' . $! . "\n";
+	flock($fh, LOCK_EX | LOCK_NB) or die 'pid "' . $self->{path} . '" already locked: ' . $! . "\n";
+	my ($pid) = (<$fh> || '') =~ /^(\d+)/;
+	close $fh if (@_ == 1);
 
-	$self->debug("read(\"$self->{path}\") = " . ($pid || ""));
+	$self->debug('read("' . $self->{path} . '") = ' . ($pid || ''));
+    
 	return $pid;
-	}
+}
 
 # Causes for the current process id to be written to the selected
 # file.  If a file handle it passed, the method assumes it has already
@@ -298,44 +304,39 @@ sub read {
 sub write {
 	my ($self, $fh) = @_;
 
-	$self->debug("write($$)");
+	$self->debug('write(' . $$ . ')');
 	if (@_ == 1) {
-		sysopen($fh, $self->{path}, O_RDWR|O_CREAT)
-			|| die qq/Cannot open pid file "$self->{path}": $!\n/;
-		flock($fh, LOCK_EX | LOCK_NB)
-        	|| die qq/pid "$self->{path}" already locked: $!\n/;
-		}
+		sysopen($fh, $self->{path}, O_RDWR|O_CREAT)or die 'Cannot open pid file "' . $self->{path} . '": ' . $! . "\n";
+		flock($fh, LOCK_EX | LOCK_NB) or die 'pid "' . $self->{path} . '" already locked: ' . $! . "\n";
+	}
 	sysseek  $fh, 0, 0;
 	truncate $fh, 0;
-	syswrite $fh, "$$\n", length("$$\n");
-	close $fh || die qq/Cannot write pid file "$self->{path}": $!\n/;
-	}
+	syswrite $fh, $$ . "\n", length($$ . "\n");
+	close $fh or die 'Cannot write pid file "' . $self->{path} . '": ' . $! . "\n";
+}
 
 sub args {
 	!defined($_[0]) ? () : ref($_[0]) ? %{$_[0]} : @_;
-	}
+}
 
 sub debug {
 	my $self = shift;
-	my $msg = shift || $_;
+	my $msg  = shift || $_;
 
-	$msg = "> Proc::PID::File - $msg"
-		if $self->{debug} =~ /M/;	# prefix with module name
-	print $msg
-		if $self->{debug};
-	}
+	$msg = '> Proc::PID::File - ' . $msg if $self->{debug} =~ /M/;	# prefix with module name
+	print $msg if $self->{debug};
+}
 
 sub DESTROY {
 	my $self = shift;
 
     if (exists($INC{'threads.pm'})) {
         return if threads->tid() != 0;
-    	}
+    }
     
 	my $pid = $self->read();
-	$self->release()
-        if $self->{path} && $pid && $pid == $$;
-	}
+	$self->release() if ($self->{path} && $pid && $pid == $$);
+}
 
 1;
 
